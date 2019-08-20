@@ -1,0 +1,7 @@
+### Python ###
+__pycache__/
+*$py.class__pycache__/
+
+# Environment files
+.env
+zingers.txt
