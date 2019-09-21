@@ -48,6 +48,10 @@ def call_zt(zt_url):
 ################################################################
 
 def main():
+    if zt_token == "":
+        print("Token null, please update ZINGTREE_API_TOKEN in `.env` file.")
+        time.sleep(3)
+        quit_now()
     zt_oper = ""
     menu(input_menu="main")
     input_menu = input("\nSelect Option from above: " + uil())
@@ -132,11 +136,11 @@ def main():
 
 def menu(input_menu):
     length_border = "=" * 80
-    top_border    = "╭╭" + length_border + "╮╮\n||"
+    top_border    = "\n" + "╭╭" + length_border + "╮╮\n||"
     bottom_border = "\n||\n╰╰" + length_border + "╯╯"
 
     if input_menu == "main":
-        print("\n" + top_border + """
+        print(top_border + """
 ||    zinger | main menu\n||
 ||    ================\n||
 ||    [0]  agents   (updates agents)
@@ -218,6 +222,7 @@ def quit_now():
     quits application nicely
     """
     print("\nQuitting... Goodbye...\n")
+    time.sleep(0.3)
     sys.exit(0)
 
 def exit_now():
@@ -227,12 +232,15 @@ def exit_now():
     print("\nExiting, bad input...\n")
     sys.exit(1)
 
+################################################################
+
 def headers():
+    __copyright__  = ""
     print("""
 ╭╭===================================================╮╮\n||
 ||  Name    :: zinger
 ||  Source  :: https://github.com/dropbox/zinger
-||  Contact :: dillon. <***REMOVED***@dropbox.com>
+||  Contact :: dillon. <dillon@dropbox.com>
 ||  Licence :: Apache-2.0\n||
 ||  Copyright © 2019 Dropbox, Inc.\n||
 ||  Made with 🧁  at ◇⁵.\n||
@@ -246,7 +254,7 @@ def print_doc(zt_oper_en, lines):
     Name  : {}
     Email : {}
     Tags  : {}
-        """.format(line[0], line[1], line[2:]))
+        """.format(line[1], line[0], line[2:]))
     # Italicise and embolden action to be taken
     confirm = input("""   This will \033[1m\x1B[3m{}\x1B[23m\033[0m the above agents...\n
     Continue? (Y/n)""".format(zt_oper_en) + uil())
@@ -272,14 +280,15 @@ def handle_decision(zt_oper):
 
     elif zt_oper == "agent_add":
         # zt_api/agent_add/{{apikey}}/{{agent name}}/{{agent login}}
-        zt_oper_en = "[ADD]"
+        zt_oper_en = "[ADD] & [TAG]"
         confirm = print_doc(zt_oper_en, lines)
         if confirm.upper() == "Y":
             print("Creating Zingtree agents...\n")
             for line in lines:
                 line     = line.split(",")
-                zt_name  = line[1].strip()
                 zt_email = line[0].strip()
+                zt_oper = "agent_add"
+                zt_name  = line[1].strip()
                 zt_url   = "{}{}/{}/{}/{}".format(zt_api_url,
                                                   zt_oper,
                                                   zt_token,
