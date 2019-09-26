@@ -38,7 +38,7 @@ def call_zt(zt_url):
     makes call to Zingtree API endpoint
     """
     # only show first 8 chars of token
-    zt_url_clean = zt_url.replace(zt_token, zt_token[:8] + "…")
+    zt_url_clean = zt_url.replace(zt_token, zt_token[:5] + "…")
     print("\nCalling URL... {}".format(zt_url_clean))
     pc = pycurl.Curl()
     pc.setopt(pc.URL, zt_url)
