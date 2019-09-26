@@ -30,6 +30,10 @@ have a text doc setup with the proper formatting. See "Config" section above.
     returns last 30 days)
 - `delete_form_data`
   - Deletes any form data entered into Zingtree during a session
+- `event_log`
+  - Returns a JSON structure with the event log for your organisation in a date
+    range. Start date and end date are in the form of `YYYY-MM-DD`. If blank,
+    returns events for last 30 days. Dates are in PST.
 - `get_form_data`
   - Outputs JSON with form variables and values entered during a session
 - `get_session_data`
