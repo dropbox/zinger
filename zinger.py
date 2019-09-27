@@ -38,7 +38,7 @@ def call_zt(zt_url):
     makes call to Zingtree API endpoint
     """
     # only show first 8 chars of token
-    zt_url_clean = zt_url.replace(zt_token, zt_token[:8] + "…")
+    zt_url_clean = zt_url.replace(zt_token, zt_token[:5] + "…")
     print("\nCalling URL... {}".format(zt_url_clean))
     pc = pycurl.Curl()
     pc.setopt(pc.URL, zt_url)
@@ -114,6 +114,8 @@ def main():
             zt_oper = "get_session_data_pure"
         elif input_sessions == "4":
             zt_oper = "get_session_notes"
+        elif input_sessions == "5":
+            zt_oper = "event_log"
         elif input_sessions.upper() == "Q":
             quit_now()
         else:
@@ -194,7 +196,8 @@ def menu(input_menu):
 ||    [1] `tree_sessions`         (lists tree sessions)
 ||    [2] `get_session_data`      (returns form values entered during session)
 ||    [3] `get_session_data_pure` (`get_session_data`, with linear path to tree)
-||    [4] `get_session_notes`     (returns agent notes from session)\n||
+||    [4] `get_session_notes`     (returns agent notes from session)
+||    [5] `event_log`             (returns event log for date range)\n||
 ||    ================\n||
 ||    [Q]  Q to quit""" + bottom_border)
 
@@ -422,6 +425,18 @@ def handle_decision(zt_oper):
         zt_url     = "{}session/{}/{}".format(zt_api_url,
                                               zt_session,
                                               zt_oper)
+        call_zt(zt_url)
+
+    elif zt_oper == "event_log":
+        # zt_api/event_log/{{apikey}}/{{start date}}/{{end date}}
+        print("Showing event log...")
+        zt_start = input("\nStart date..." + uil())
+        zt_end   = input("\nEnd date..." + uil())
+        zt_url   = "{}{}/{}/{}/{}".format(zt_api_url,
+                                          zt_oper,
+                                          zt_token,
+                                          zt_start,
+                                          zt_end)
         call_zt(zt_url)
 
     elif zt_oper == "agent_sessions":
