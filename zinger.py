@@ -81,8 +81,10 @@ def main():
         elif input_trees == "1":
             zt_oper = "get_trees"
         elif input_trees == "2":
-            zt_oper = "get_tree_tag_any"
+            zt_oper = "get_tags"
         elif input_trees == "3":
+            zt_oper = "get_tree_tag_any"
+        elif input_trees == "4":
             zt_oper = "get_tree_tag_all"
         elif input_trees.upper() == "Q":
             quit_now()
@@ -171,9 +173,10 @@ def menu(input_menu):
 ||    zinger | trees menu\n||
 ||    ================\n||
 ||    [0] `search_trees`     (search all trees for matching text)
-||    [1] `get_trees`        (get all trees)
-||    [2] `get_tree_tag_any` (gets trees matching \x1B[3mANY\x1B[23m tags)
-||    [3] `get_tree_tag_all` (gets trees matching \033[1mALL\033[0m tags)\n||
+||    [1] `get_trees`        (fetches all trees)
+||    [2] `get_tags`         (fetches all tags used on trees)
+||    [3] `get_tree_tag_any` (gets trees matching \x1B[3mANY\x1B[23m tags)
+||    [4] `get_tree_tag_all` (gets trees matching \033[1mALL\033[0m tags)\n||
 ||    ================\n||
 ||    [Q]  Q to quit""" + bottom_border)
 
@@ -366,6 +369,14 @@ def handle_decision(zt_oper):
                                        zt_oper,
                                        zt_token,
                                        zt_email)
+        call_zt(zt_url)
+
+    elif zt_oper == "get_tags":
+        # zt_api/tree/{{apikey}}/get_tags
+        print("Getting tags from tree...")
+        zt_url = "{}tree/{}/{}".format(zt_api_url,
+                                       zt_token,
+                                       zt_oper)
         call_zt(zt_url)
 
     elif zt_oper == "get_trees":
