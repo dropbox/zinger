@@ -44,6 +44,8 @@ have a text doc setup with the proper formatting. See "Config" section above.
    returning a "pure" linear path through the tree
 - `get_session_notes`
   - Returns a JSON structure with agent-entered notes from a session
+- `get_tags`
+  - Returns a JSON structure with all tags used in your organisation's trees.
 - `get_trees`
   - Returns a JSON structure with information about all trees
 - `get_tree_tag_all`
