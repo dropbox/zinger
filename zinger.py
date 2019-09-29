@@ -128,6 +128,7 @@ def main():
 
     elif input_menu == "00":
         headers()
+        call_zt("uptime.php")
         time.sleep(5)
         subp.call(["clear"])
 
