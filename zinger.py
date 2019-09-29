@@ -27,9 +27,8 @@ import time
 env_path  = Path(".") / ".env"
 load_dotenv(dotenv_path=env_path)
 
-zt_list    = "zingers.txt"
-zt_api_url = "https://zingtree.com/api/"
-zt_token   = os.getenv("ZINGTREE_API_TOKEN")
+text_doc = "zingers.txt"
+zt_token = os.getenv("ZINGTREE_API_TOKEN")
 
 ################################################################
 
@@ -37,11 +36,15 @@ def call_zt(zt_url):
     """
     makes call to Zingtree API endpoint
     """
+    zt_api = "https://zingtree.com/api/" + zt_url
+
     # only show first 8 chars of token
-    zt_url_clean = zt_url.replace(zt_token, zt_token[:5] + "…")
+    zt_url_clean = zt_api.replace(zt_token, zt_token[:5] + "…")
     print("\nCalling URL... {}".format(zt_url_clean))
     pc = pycurl.Curl()
-    pc.setopt(pc.URL, zt_url)
+    pc.setopt(pc.URL, zt_api)
+    if "uptime" in zt_api:
+        pc.setopt(pc.VERBOSE, True)
     pc.perform()
     pc.close()
 
@@ -274,12 +277,12 @@ def handle_decision(zt_oper):
     """
 
     try:
-        text_doc = open(zt_list).readlines()
+        zt_list = open(text_doc).readlines()
     except FileNotFoundError:
-        print("{} doc not found.\n".format(zt_list))
+        print("{} doc not found.\n".format(text_doc))
         exit_now()
 
-    lines = [line.rstrip("\n") for line in text_doc]
+    lines = [line.rstrip("\n") for line in zt_list]
 
     if zt_oper == "main":
         main()
@@ -295,19 +298,11 @@ def handle_decision(zt_oper):
                 zt_email = line[0].strip()
                 zt_oper = "agent_add"
                 zt_name  = line[1].strip()
-                zt_url   = "{}{}/{}/{}/{}".format(zt_api_url,
-                                                  zt_oper,
-                                                  zt_token,
-                                                  zt_name,
-                                                  zt_email)
+                zt_url   = "{}/{}/{}/{}".format(zt_oper, zt_token, zt_name, zt_email)
                 call_zt(zt_url)
                 zt_oper = "agent_tag"
                 zt_tags = "/" + ",".join(map(str, line[2:])).strip()
-                zt_url  = "{}{}/{}/{}{}".format(zt_api_url,
-                                                zt_oper,
-                                                zt_token,
-                                                zt_email,
-                                                zt_tags)
+                zt_url  = "{}/{}/{}{}".format(zt_oper, zt_token, zt_email, zt_tags)
                 call_zt(zt_url)
         else:
             quit_now()
@@ -315,18 +310,10 @@ def handle_decision(zt_oper):
     elif zt_oper == "agent_add_inter":
         zt_oper = "agent_add"
         zt_name, zt_email, zt_tags = input_agent_info()
-        zt_url  = "{}{}/{}/{}/{}".format(zt_api_url,
-                                         zt_oper,
-                                         zt_token,
-                                         zt_name,
-                                         zt_email)
+        zt_url  = "{}/{}/{}/{}".format(zt_oper, zt_token, zt_name, zt_email)
         call_zt(zt_url)
         zt_oper = "agent_tag"
-        zt_url  = "{}{}/{}/{}/{}".format(zt_api_url,
-                                         zt_oper,
-                                         zt_token,
-                                         zt_email,
-                                         zt_tags)
+        zt_url  = "{}/{}/{}/{}".format(zt_oper, zt_token, zt_email, zt_tags)
         call_zt(zt_url)
 
     elif zt_oper == "agent_tag":
@@ -339,11 +326,7 @@ def handle_decision(zt_oper):
                 line     = line.split(",")
                 zt_email = line[0].strip()
                 zt_tags  = "/" + ",".join(map(str, line[2:])).strip()
-                zt_url   = "{}{}/{}/{}{}".format(zt_api_url,
-                                                 zt_oper,
-                                                 zt_token,
-                                                 zt_email,
-                                                 zt_tags)
+                zt_url   = "{)/{}/{}{}".format(zt_oper, zt_token, zt_email, zt_tags)
                 call_zt(zt_url)
         else:
             quit_now()
@@ -357,10 +340,7 @@ def handle_decision(zt_oper):
             for line in lines:
                 line     = line.split(",")
                 zt_email = line[0].strip()
-                zt_url   = "{}{}/{}/{}".format(zt_api_url,
-                                               zt_oper,
-                                               zt_token,
-                                               zt_email)
+                zt_url   = "{}/{}/{}".format(zt_oper, zt_token, zt_email)
                 call_zt(zt_url)
         else:
             quit_now()
@@ -368,74 +348,54 @@ def handle_decision(zt_oper):
     elif zt_oper == "agent_remove_inter":
         zt_oper  = "agent_remove"
         zt_email = input_agent_email()
-        zt_url   = "{}{}/{}/{}".format(zt_api_url,
-                                       zt_oper,
-                                       zt_token,
-                                       zt_email)
+        zt_url   = "{}/{}/{}".format(zt_oper, zt_token, zt_email)
         call_zt(zt_url)
 
     elif zt_oper == "get_tags":
         # zt_api/tree/{{apikey}}/get_tags
         print("Getting tags from tree...")
-        zt_url = "{}tree/{}/{}".format(zt_api_url,
-                                       zt_token,
-                                       zt_oper)
+        zt_url = "tree/{}/{}".format(zt_token, zt_oper)
         call_zt(zt_url)
 
     elif zt_oper == "get_trees":
         # zt_api/tree/{{apikey}}/get_trees
         print("Climbing trees...")
-        zt_url = "{}tree/{}/{}".format(zt_api_url,
-                                       zt_token,
-                                       zt_oper)
+        zt_url = "tree/{}/{}".format(zt_token, zt_oper)
         call_zt(zt_url)
 
     elif zt_oper == "get_tree_tag_all":
         # zt_api/tree/{{apikey}}/get_tree_tag_all/{{taglist}}
         print("Picking ALL tags from trees...")
         zt_tags = input("\nSearch tree by comma-separated tags..." + uil())
-        zt_url  = "{}tree/{}/{}/{}".format(zt_api_url,
-                                           zt_token,
-                                           zt_oper,
-                                           zt_tags)
+        zt_url  = "tree/{}/{}/{}".format(zt_token, zt_oper, zt_tags)
         call_zt(zt_url)
 
     elif zt_oper == "get_tree_tag_any":
         # zt_api/tree/{{apikey}}/get_tree_tag_any/{{taglist}}
         print("Picking ANY tags from trees...")
         zt_tags = input("\nSearch tree by comma-separated tags..." + uil())
-        zt_url  = "{}tree/{}/{}/{}".format(zt_api_url,
-                                           zt_token,
-                                           zt_oper,
-                                           zt_tags)
+        zt_url  = "tree/{}/{}/{}".format(zt_token, zt_oper, zt_tags)
         call_zt(zt_url)
 
     elif zt_oper == "search_trees":
         # zt_api/tree/{{apikey}}/search_trees/{{search text}}
         print("Scanning leaves...")
         zt_query = input("\nEnter query..." + uil())
-        zt_url   = "{}tree/{}/{}/{}".format(zt_api_url,
-                                            zt_token,
-                                            zt_oper,
-                                            zt_query)
+        zt_url   = "tree/{}/{}/{}".format(zt_token, zt_oper, zt_query)
         call_zt(zt_url)
 
     elif zt_oper == "get_form_data":
         # zt_api/session/{{session ID}}/get_form_data
         print("Getting form data...")
         zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                             zt_session,
-                                             zt_oper)
+        zt_url     = "session/{}/{}".format(zt_session, zt_oper)
         call_zt(zt_url)
 
     elif zt_oper == "delete_form_data":
         # zt_api/session/{{session ID}}/delete_form_data
         print("Deleting form data...")
         zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                              zt_session,
-                                              zt_oper)
+        zt_url     = "session/{}/{}".format(zt_session, zt_oper)
         call_zt(zt_url)
 
     elif zt_oper == "event_log":
@@ -443,11 +403,7 @@ def handle_decision(zt_oper):
         print("Showing event log...")
         zt_start = input("\nStart date..." + uil())
         zt_end   = input("\nEnd date..." + uil())
-        zt_url   = "{}{}/{}/{}/{}".format(zt_api_url,
-                                          zt_oper,
-                                          zt_token,
-                                          zt_start,
-                                          zt_end)
+        zt_url   = "{}/{}/{}/{}".format(zt_oper, zt_token, zt_start, zt_end)
         call_zt(zt_url)
 
     elif zt_oper == "agent_sessions":
@@ -458,12 +414,7 @@ def handle_decision(zt_oper):
             zt_email = line[0].strip()
             zt_start = input("\nStart date - {}...".format(zt_email) + uil())
             zt_end   = input("\nEnd date - {}...".format(zt_email) + uil())
-            zt_url   = "{}{}/{}/{}/{}/{}".format(zt_api_url,
-                                                 zt_oper,
-                                                 zt_token,
-                                                 zt_email,
-                                                 zt_start,
-                                                 zt_end)
+            zt_url   = "{}/{}/{}/{}/{}".format(zt_oper, zt_token, zt_email, zt_start, zt_end)
             call_zt(zt_url)
 
     elif zt_oper == "tree_sessions":
@@ -472,39 +423,28 @@ def handle_decision(zt_oper):
         zt_tree  = input("\nEnter tree_id..." + uil())
         zt_start = input("\nStart date - {}...".format(zt_tree) + uil())
         zt_end   = input("\nEnd date - {}...".format(zt_tree) + uil())
-        zt_url   = "{}{}/{}/{}/{}/{}".format(zt_api_url,
-                                             zt_oper,
-                                             zt_token,
-                                             zt_tree,
-                                             zt_start,
-                                             zt_end)
+        zt_url   = "{}/{}/{}/{}/{}".format(zt_oper, zt_token, zt_tree, zt_start, zt_end)
         call_zt(zt_url)
 
     elif zt_oper == "get_session_data":
         # zt_api/session/{{session ID}}/get_session_data
         print("Getting session data...")
         zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                              zt_session,
-                                              zt_oper)
+        zt_url     = "session/{}/{}".format(zt_session, zt_oper)
         call_zt(zt_url)
 
     elif zt_oper == "get_session_data_pure":
         # zt_api/session/{{session ID}}/get_session_data_pure
         print("Getting form data...")
         zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                              zt_session,
-                                              zt_oper)
+        zt_url     = "session/{}/{}".format(zt_session, zt_oper)
         call_zt(zt_url)
 
     elif zt_oper == "get_session_notes":
         # zt_api/session/{{session ID}}/get_session_notes
         print("Getting form data...")
         zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                              zt_session,
-                                              zt_oper)
+        zt_url     = "session/{}/{}".format(zt_session, zt_oper)
         call_zt(zt_url)
 
     elif zt_oper.upper() == "Q":
