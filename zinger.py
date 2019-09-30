@@ -62,13 +62,13 @@ def main():
         menu(input_menu)
         input_users = input("\nSelect Option from above: " + uil())
         if input_users == "0":
-            zt_oper = "agent_add"
+            zt_oper = "agent_add_auto"
         elif input_users == "1":
             zt_oper = "agent_add_inter"
         elif input_users == "2":
             zt_oper = "agent_tag"
         elif input_users == "3":
-            zt_oper = "agent_remove"
+            zt_oper = "agent_remove_auto"
         elif input_users == "4":
             zt_oper = "agent_remove_inter"
         elif input_users.upper() == "Q":
@@ -245,7 +245,6 @@ def exit_now():
 ################################################################
 
 def headers():
-    __copyright__  = ""
     print("""
 ╭╭===================================================╮╮\n||
 ||  Name    :: zinger
@@ -266,8 +265,8 @@ def print_doc(zt_oper_en, lines):
     Tags  : {}
         """.format(line[1], line[0], line[2:]))
     # Italicise and embolden action to be taken
-    confirm = input("""   This will \033[1m\x1B[3m{}\x1B[23m\033[0m the above agents...\n
-    Continue? (Y/n)""".format(zt_oper_en) + uil())
+    confirm = input("""    This will \033[1m\x1B[3m{}\x1B[23m\033[0m the above {}...\n
+    Continue? (Y/n)""".format(zt_oper_en, "agent" if len(lines) == 1 else str(len(lines)) + " agents")+ uil())
     return confirm
 
 def handle_decision(zt_oper):
@@ -288,16 +287,20 @@ def handle_decision(zt_oper):
     if zt_oper == "main":
         main()
 
-    elif zt_oper == "agent_add":
+    elif zt_oper == "agent_add_auto":
         # zt_api/agent_add/{{apikey}}/{{agent name}}/{{agent login}}
         zt_oper_en = "[ADD] & [TAG]"
+        if not lines:
+            print("Agent doc `{}` empty!".format(text_doc))
+            exit_now()
         confirm = print_doc(zt_oper_en, lines)
+
         if confirm.upper() == "Y":
             print("Creating Zingtree agents...\n")
             for line in lines:
                 line     = line.split(",")
                 zt_email = line[0].strip()
-                zt_oper = "agent_add"
+                zt_oper  = "agent_add"
                 zt_name  = line[1].strip()
                 zt_url   = "{}/{}/{}/{}".format(zt_oper, zt_token, zt_name, zt_email)
                 call_zt(zt_url)
@@ -332,8 +335,9 @@ def handle_decision(zt_oper):
         else:
             quit_now()
 
-    elif zt_oper == "agent_remove":
+    elif zt_oper == "agent_remove_auto":
         # zt_api/agent_remove/{{apikey}}/{{agent login}}
+        zt_oper = "agent_remove"
         zt_oper_en = "[REMOVE]"
         confirm = print_doc(zt_oper_en, lines)
         if confirm.upper() == "Y":
@@ -412,7 +416,8 @@ def handle_decision(zt_oper):
         print("Gathering agent sessions...")
         for line in lines:
             line     = line.split(",")
-            zt_email = line[0].strip()
+            # zt_email = line[0].strip()
+            zt_email = "*"
             zt_start = input("\nStart date - {}...".format(zt_email) + uil())
             zt_end   = input("\nEnd date - {}...".format(zt_email) + uil())
             zt_url   = "{}/{}/{}/{}/{}".format(zt_oper, zt_token, zt_email, zt_start, zt_end)
