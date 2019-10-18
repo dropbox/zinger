@@ -135,6 +135,8 @@ def main():
         main()
 
     handle_decision(zt_oper)
+    if "agent" in zt_oper:
+        print("Go to agents list: https://zingtree.com/account/agents.php")
 
 ################################################################
 
