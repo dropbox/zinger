@@ -90,4 +90,4 @@ https://www.apache.org/licenses/LICENSE-2.0 for more details.
 
 ---
 
-Made with 🧁  at ◇⁵.
+Made with 🧁 .

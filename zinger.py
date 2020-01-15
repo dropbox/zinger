@@ -4,6 +4,7 @@ from dotenv  import load_dotenv
 from pathlib import Path
 from os.path import join
 
+import logging
 import os
 import pycurl
 import subprocess as subp
@@ -30,6 +31,8 @@ load_dotenv(dotenv_path=env_path)
 text_doc = "zingers.txt"
 zt_token = os.getenv("ZINGTREE_API_TOKEN")
 
+logging.basicConfig(format="%(asctime)s:%(levelname)s:%(funcName)s:%(message)s", filename="logz.log", level=logging.DEBUG)
+
 ################################################################
 
 def call_zt(zt_url):
@@ -37,15 +40,20 @@ def call_zt(zt_url):
     makes call to Zingtree API endpoint
     """
     zt_api = "https://zingtree.com/api/" + zt_url
-
     # only show first 8 chars of token
     zt_url_clean = zt_api.replace(zt_token, zt_token[:5] + "…")
-    print("\nCalling URL... {}".format(zt_url_clean))
     pc = pycurl.Curl()
     pc.setopt(pc.URL, zt_api)
-    if "uptime" in zt_api:
-        pc.setopt(pc.VERBOSE, True)
-    pc.perform()
+    # if "uptime" in zt_api:
+    #     pc.setopt(pc.VERBOSE, True)
+    try:
+        logging.info("Calling URL... `{}`".format(zt_url_clean))
+        pc.perform()
+        if "uptime" in zt_api:
+        #     pc.setopt(pc.VERBOSE, True)
+            time.sleep(0.5)
+    except pycurl.error:
+        logging.error("Issue with pycurl, check broadband connection")
     pc.close()
 
 ################################################################
@@ -57,9 +65,11 @@ def main():
         quit_now()
     zt_oper = ""
     menu(input_menu="main")
+    logging.debug("Main menu")
     input_menu = input("\nSelect Option from above: " + uil())
     if input_menu == "0":
         menu(input_menu)
+        logging.debug("Agents menu")
         input_users = input("\nSelect Option from above: " + uil())
         if input_users == "0":
             zt_oper = "agent_add_auto"
@@ -78,6 +88,7 @@ def main():
 
     elif input_menu == "1":
         menu(input_menu)
+        logging.debug("Trees menu")
         input_trees = input("\nSelect Option from above: " + uil())
         if input_trees == "0":
             zt_oper = "search_trees"
@@ -96,6 +107,7 @@ def main():
 
     elif input_menu == "2":
         menu(input_menu)
+        logging.debug("Forms menu")
         input_forms = input("\nSelect Option from above: " + uil())
         if input_forms == "0":
             zt_oper = "get_form_data"
@@ -108,6 +120,7 @@ def main():
 
     elif input_menu == "3":
         menu(input_menu)
+        logging.debug("Sessions menu")
         input_sessions = input("\nSelect Option from above: " + uil())
         if input_sessions == "0":
             zt_oper = "agent_sessions"
@@ -127,8 +140,10 @@ def main():
             main()
 
     elif input_menu == "00":
+        logging.debug("Meta & uptime")
         headers()
         call_zt("uptime.php")
+        print()
         time.sleep(5)
         subp.call(["clear"])
 
@@ -230,6 +245,7 @@ def input_agent_email():
     return zt_email
 
 def quit_now():
+    logging.debug("quit_now")
     """
     quits application nicely
     """
@@ -251,10 +267,9 @@ def headers():
 ╭╭===================================================╮╮\n||
 ||  Name    :: zinger
 ||  Source  :: https://github.com/dropbox/zinger
-||  Contact :: dillon. <dillon@dropbox.com>
 ||  Licence :: Apache-2.0\n||
 ||  Copyright © 2019 Dropbox, Inc.\n||
-||  Made with 🧁  at ◇⁵.\n||
+||  Made with 🧁 .\n||
 ╰╰===================================================╯╯
     """)
 
