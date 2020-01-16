@@ -31,7 +31,7 @@ load_dotenv(dotenv_path=env_path)
 text_doc = "zingers.txt"
 zt_token = os.getenv("ZINGTREE_API_TOKEN")
 
-logging.basicConfig(format="%(asctime)s:%(levelname)s:%(funcName)s:%(message)s", filename="logz.log", level=logging.DEBUG)
+logging.basicConfig(format="%(asctime)s:%(levelname)s:%(funcName)s:%(message)s", filename="logz.log", level=logging.INFO)
 
 ################################################################
 
