@@ -6,7 +6,7 @@ from os.path import join
 
 import logging
 import os
-import pycurl
+import requests
 import subprocess as subp
 import sys
 import time
@@ -42,19 +42,17 @@ def call_zt(zt_url):
     zt_api = "https://zingtree.com/api/" + zt_url
     # only show first 8 chars of token
     zt_url_clean = zt_api.replace(zt_token, zt_token[:5] + "…")
-    pc = pycurl.Curl()
-    pc.setopt(pc.URL, zt_api)
-    # if "uptime" in zt_api:
-    #     pc.setopt(pc.VERBOSE, True)
-    try:
-        logging.info("Calling URL... `{}`".format(zt_url_clean))
-        pc.perform()
-        if "uptime" in zt_api:
-        #     pc.setopt(pc.VERBOSE, True)
-            time.sleep(0.5)
-    except pycurl.error:
-        logging.error("Issue with pycurl, check broadband connection")
-    pc.close()
+    logging.info("Calling URL... `{}`".format(zt_url_clean))
+    print("")
+    r = requests.get(zt_api)
+    # print(result)
+    if "uptime" in zt_api:
+        print(r)
+    else:
+        result = r.json()
+        for key in result:
+            print("{}: {}".format(key, result[key]))
+
 
 ################################################################
 

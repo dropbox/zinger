@@ -23,6 +23,6 @@ setup(
     ],
     keywords="zingtree",
     packages=find_packages(),
-    install_requires=["pycurl", "dotenv", "pathlib"],
+    install_requires=["requests", "python-dotenv", "pathlib"],
     python_requires="~=3.5"
 )
