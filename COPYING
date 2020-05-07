@@ -1,6 +1,6 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: zinger
-Upstream-Contact: ***REMOVED***
+Upstream-Contact: df-dbx <53367393+df-dbx@users.noreply.github.com>
 Source: https://github.com/dropbox/zinger
 Comment: This file documents the copyright statements and licenses for
  every file in this package in a machine-readable format.  For a less
@@ -9,12 +9,10 @@ Comment: This file documents the copyright statements and licenses for
  range specifies every single year in that closed interval.
 Files: *
 Copyright: © 2019 Dropbox, Inc.
-***REMOVED***
 License: Apache-2.0
 
 Files: ./zinger.py
 Copyright: © 2019 Dropbox, Inc.
-***REMOVED***
 License: Apache-2.0
 
 License: Apache-2.0

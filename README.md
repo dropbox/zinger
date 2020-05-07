@@ -5,11 +5,12 @@ information via the [Zingtree RESTful API](http://www.zingtree.com/api/).
 ## Getting started
 ### Config
 Set up `.env` file at root if running from script, or configure `python-dotenv`
-for your own script/program.
+for your own script/program. You can use the `env_sample` and rename to `.env`
+(with full-stop). Fill in your API token
 
-`zingers.txt` should contain one agent config per line in the following format:
+`zingers.txt` should contain one agent config per line in the following format: `[email@domain],[Forename Surname],[all tags separated by comma]`, example:
 ```
-[email@domain],[Forename Surname],[all tags separated by comma]
+asummers@zingtree.com,Alice Summers,tag_0,tag_2
 bwinters@zingtree.com,Bob Winters,tag_0,tag_1
 ```
 
