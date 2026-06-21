@@ -1,520 +1,391 @@
 #!/usr/bin/env python3
+"""
+zinger -- a small interactive CLI for the Zingtree API.
 
-from dotenv  import load_dotenv
-from pathlib import Path
-from os.path import join
+API reference : https://help.zingtree.com/hc/en-us/articles/5048766502043-Zingtree-API
+API key       : https://zingtree.com/account/organizations.php  ->  `API Key`
+                Store it in a `.env` file as  `ZINGTREE_API_TOKEN="..."`, or
+                temporary environment variable via executing the following:
+                `export ZINGTREE_API_TOKEN="..."`
+
+This project is libre and licenced APACHE-2.0; see the COPYING file or
+https://www.apache.org/licenses/LICENSE-2.0 for more details.
+
+Copyright (c) 2019,  Dropbox, Inc.
+Author: Dillon Feeney.
+
+Created: 2019-08-20
+Updated: 2020-05-07
+"""
+
+from __future__ import annotations
 
 import os
-import pycurl
-import subprocess as subp
 import sys
-import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import urlopen
 
-################################################################
-#
-# Zingtree API:
-#     https://zingtree.com/api/
-#
-# API token available from:
-#     https://zingtree.com/account/organizations.php -> `API Key`
-#     Add token to .env file as `ZINGTREE_API_TOKEN=""`
-#
-# This project is libre and licenced APACHE-2.0; see the COPYING file or
-# https://www.apache.org/licenses/LICENSE-2.0 for more details.
-#
-################################################################
+try:
+    from dotenv import load_dotenv
+except ImportError:                       # dotenv is optional
+    def load_dotenv(*_args, **_kwargs):   # noqa: D401
+        return False
 
-env_path  = Path(".") / ".env"
-load_dotenv(dotenv_path=env_path)
+# ----------------------------------------------------------------------------
+# Configuration
+# ----------------------------------------------------------------------------
 
-zt_list    = "zingers.txt"
-zt_api_url = "https://zingtree.com/api/"
-zt_token   = os.getenv("ZINGTREE_API_TOKEN")
+API_URL    = "https://zingtree.com/api/"
+ENV_FILE   = Path(".") / ".env"
+AGENT_FILE = Path("zingers.txt")
+TIMEOUT    = 30
+PROMPT     = "\n\n  ==> "
 
-################################################################
+load_dotenv(dotenv_path=ENV_FILE)
 
-def call_zt(zt_url):
-    """
-    makes call to Zingtree API endpoint
-    """
-    # only show first 8 chars of token
-    zt_url_clean = zt_url.replace(zt_token, zt_token[:5] + "…")
-    print("\nCalling URL... {}".format(zt_url_clean))
-    pc = pycurl.Curl()
-    pc.setopt(pc.URL, zt_url)
-    pc.perform()
-    pc.close()
+# ----------------------------------------------------------------------------
+# Domain model
+# ----------------------------------------------------------------------------
 
-################################################################
+class ZingtreeError(RuntimeError):
+    """Raised for any expected, recoverable failure."""
 
-def main():
-    if zt_token == "":
-        print("Token null, please update ZINGTREE_API_TOKEN in `.env` file.")
-        time.sleep(3)
-        quit_now()
-    zt_oper = ""
-    menu(input_menu="main")
-    input_menu = input("\nSelect Option from above: " + uil())
-    if input_menu == "0":
-        menu(input_menu)
-        input_users = input("\nSelect Option from above: " + uil())
-        if input_users == "0":
-            zt_oper = "agent_add"
-        elif input_users == "1":
-            zt_oper = "agent_add_inter"
-        elif input_users == "2":
-            zt_oper = "agent_tag"
-        elif input_users == "3":
-            zt_oper = "agent_remove"
-        elif input_users == "4":
-            zt_oper = "agent_remove_inter"
-        elif input_users.upper() == "Q":
-            quit_now()
-        else:
-            main()
 
-    elif input_menu == "1":
-        menu(input_menu)
-        input_trees = input("\nSelect Option from above: " + uil())
-        if input_trees == "0":
-            zt_oper = "search_trees"
-        elif input_trees == "1":
-            zt_oper = "get_trees"
-        elif input_trees == "2":
-            zt_oper = "get_tags"
-        elif input_trees == "3":
-            zt_oper = "get_tree_tag_any"
-        elif input_trees == "4":
-            zt_oper = "get_tree_tag_all"
-        elif input_trees.upper() == "Q":
-            quit_now()
-        else:
-            main()
+@dataclass
+class Agent:
+    email: str
+    name: str
+    tags: list[str] = field(default_factory=list)
 
-    elif input_menu == "2":
-        menu(input_menu)
-        input_forms = input("\nSelect Option from above: " + uil())
-        if input_forms == "0":
-            zt_oper = "get_form_data"
-        elif input_forms == "1":
-            zt_oper = "delete_form_data"
-        elif input_forms.upper() == "Q":
-            quit_now()
-        else:
-            main()
 
-    elif input_menu == "3":
-        menu(input_menu)
-        input_sessions = input("\nSelect Option from above: " + uil())
-        if input_sessions == "0":
-            zt_oper = "agent_sessions"
-        elif input_sessions == "1":
-            zt_oper = "tree_sessions"
-        elif input_sessions == "2":
-            zt_oper = "get_session_data"
-        elif input_sessions == "3":
-            zt_oper = "get_session_data_pure"
-        elif input_sessions == "4":
-            zt_oper = "get_session_notes"
-        elif input_sessions == "5":
-            zt_oper = "event_log"
-        elif input_sessions.upper() == "Q":
-            quit_now()
-        else:
-            main()
+@dataclass
+class ZingtreeClient:
+    """Thin wrapper over the Zingtree REST endpoints.
 
-    elif input_menu == "00":
-        headers()
-        time.sleep(5)
-        subp.call(["clear"])
-
-    elif input_menu.upper() == "Q":
-        quit_now()
-
-    else:
-        main()
-
-    handle_decision(zt_oper)
-    if "agent" in zt_oper:
-        print("Go to agents list: https://zingtree.com/account/agents.php")
-
-################################################################
-
-def menu(input_menu):
-    length_border = "=" * 80
-    top_border    = "\n" + "╭╭" + length_border + "╮╮\n||"
-    bottom_border = "\n||\n╰╰" + length_border + "╯╯"
-
-    if input_menu == "main":
-        print(top_border + """
-||    zinger | main menu\n||
-||    ================\n||
-||    [0]  agents   (updates agents)
-||    [1]  trees    (get info on trees)
-||    [2]  forms    (get or remove form info entered on trees)
-||    [3]  sessions (tree and agent session info)\n||
-||    [00] μετά     (prints meta)\n||
-||    ================\n||
-||    [Q]  Q to quit""" + bottom_border)
-
-    elif input_menu == "0":
-        print(top_border + """
-||    zinger | agents menu\n||
-||    ================\n||
-||    [0] auto `agent_add`      (from file)
-||    [1] manual `agent_add`    (interactive)
-||    [2] auto `agent_tag`      (from file)
-||    [3] auto `agent_remove`   (removes agents)
-||    [4] manual `agent_remove` (interactive)\n||
-||    ================\n||
-||    zingers.txt doc should be formatted like:\n||
-||        `bwinters@zingtree.com,Bob Winters,tag_0,tag_1`\n||
-||    ================\n||
-||    [Q]  Q to quit""" + bottom_border)
-
-    elif input_menu == "1":
-        print(top_border + """
-||    zinger | trees menu\n||
-||    ================\n||
-||    [0] `search_trees`     (search all trees for matching text)
-||    [1] `get_trees`        (fetches all trees)
-||    [2] `get_tags`         (fetches all tags used on trees)
-||    [3] `get_tree_tag_any` (gets trees matching \x1B[3mANY\x1B[23m tags)
-||    [4] `get_tree_tag_all` (gets trees matching \033[1mALL\033[0m tags)\n||
-||    ================\n||
-||    [Q]  Q to quit""" + bottom_border)
-
-    elif input_menu == "2":
-        print(top_border + """
-||    zinger | forms menu\n||
-||    ================\n||
-||    [0] `get_form_data`    (form values entered during a session)
-||    [1] `delete_form_data` (deletes any form data)\n||
-||    ================\n||
-||    [Q]  Q to quit""" + bottom_border)
-
-    elif input_menu == "3":
-        print(top_border + """
-||    zinger | sessions menu\n||
-||    ================\n||
-||    [0] `agent_sessions`        (lists agent sessions)
-||    [1] `tree_sessions`         (lists tree sessions)
-||    [2] `get_session_data`      (returns form values entered during session)
-||    [3] `get_session_data_pure` (`get_session_data`, with linear path to tree)
-||    [4] `get_session_notes`     (returns agent notes from session)
-||    [5] `event_log`             (returns event log for date range)\n||
-||    ================\n||
-||    [Q]  Q to quit""" + bottom_border)
-
-################################################################
-
-def uil():
-    """
-    user_input_line():
-    """
-    user_input = "\n\n  ==> "
-    return user_input
-
-def input_agent_info():
-    zt_name  = input('\nEnter agent\'s name...' + uil())
-    zt_email = input('\nEnter agent\'s email...' + uil())
-    zt_tags  = input('\nEnter agent\'s tags...' + uil())
-    return zt_name, zt_email, zt_tags
-
-def input_agent_email():
-    zt_email = input('\nEnter agent\'s email...' + uil())
-    return zt_email
-
-def quit_now():
-    """
-    quits application nicely
-    """
-    print("\nQuitting... Goodbye...\n")
-    time.sleep(0.3)
-    sys.exit(0)
-
-def exit_now():
-    """
-    quits applications not nicely
-    """
-    print("\nExiting, bad input...\n")
-    sys.exit(1)
-
-################################################################
-
-def headers():
-    __copyright__  = ""
-    print("""
-╭╭===================================================╮╮\n||
-||  Name    :: zinger
-||  Source  :: https://github.com/dropbox/zinger
-||  Contact :: dillon. <dillon@dropbox.com>
-||  Licence :: Apache-2.0\n||
-||  Copyright © 2019 Dropbox, Inc.\n||
-||  Made with 🧁  at ◇⁵.\n||
-╰╰===================================================╯╯
-    """)
-
-def print_doc(zt_oper_en, lines):
-    for line in lines:
-        line = line.split(",")
-        print("""
-    Name  : {}
-    Email : {}
-    Tags  : {}
-        """.format(line[1], line[0], line[2:]))
-    # Italicise and embolden action to be taken
-    confirm = input("""   This will \033[1m\x1B[3m{}\x1B[23m\033[0m the above agents...\n
-    Continue? (Y/n)""".format(zt_oper_en) + uil())
-    return confirm
-
-def handle_decision(zt_oper):
-    """
-    gets users from list of formatted lines in text doc
-
-    `[email@domain],[Forename Surname],[comma-separated tags]`
+    The API embeds the key and all arguments in the URL path, so every
+    segment is percent-encoded.  Commas are preserved because tag lists are
+    comma-delimited inside a single segment.
     """
 
+    token: str
+    base_url: str = API_URL
+    timeout: int = TIMEOUT
+
+    def _mask(self, url: str) -> str:
+        return url.replace(self.token, self.token[:5] + "...")
+
+    def call(self, *segments: str) -> str:
+        path = "/".join(quote(str(s), safe=",") for s in segments)
+        url  = self.base_url + path
+        print("\nCalling URL... {}".format(self._mask(url)))
+        try:
+            with urlopen(url, timeout=self.timeout) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+        except HTTPError as exc:
+            raise ZingtreeError("HTTP {} from {}".format(exc.code, self._mask(url))) from exc
+        except URLError as exc:
+            raise ZingtreeError("Request failed: {}".format(exc.reason)) from exc
+        print(body)
+        return body
+
+
+def load_agents(path: Path = AGENT_FILE) -> list[Agent]:
+    """Parse `zingers.txt`.
+
+    Each line:  email,Forename Surname,tag_0,tag_1
+    """
+    if not path.exists():
+        raise ZingtreeError("{} not found.".format(path))
+
+    agents: list[Agent] = []
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        raw = raw.strip()
+        if not raw:
+            continue
+        fields = [f.strip() for f in raw.split(",")]
+        if len(fields) < 2:
+            raise ZingtreeError("Malformed line {}: {!r}".format(lineno, raw))
+        email, name, *tags = fields
+        agents.append(Agent(email=email, name=name, tags=tags))
+
+    if not agents:
+        raise ZingtreeError("{} is empty.".format(path))
+    return agents
+
+
+def confirm_agents(agents: list[Agent], action: str) -> bool:
+    for a in agents:
+        print("\n    Name  : {}\n    Email : {}\n    Tags  : {}".format(a.name, a.email, a.tags))
+    answer = input("\n  This will {} the above agents.  Continue? (y/N){}".format(action, PROMPT))
+    return answer.strip().lower() == "y"
+
+
+# ----------------------------------------------------------------------------
+# Operations
+# ----------------------------------------------------------------------------
+
+def op_agent_add(client: ZingtreeClient) -> None:
+    agents = load_agents()
+    if not confirm_agents(agents, "ADD and TAG"):
+        return
+    for a in agents:
+        client.call("agent_add", client.token, a.name, a.email)
+        if a.tags:
+            client.call("agent_tag", client.token, a.email, ",".join(a.tags))
+
+
+def op_agent_add_inter(client: ZingtreeClient) -> None:
+    name  = input("\nEnter agent's name..."  + PROMPT).strip()
+    email = input("\nEnter agent's email..." + PROMPT).strip()
+    tags  = input("\nEnter agent's tags..."  + PROMPT).strip()
+    client.call("agent_add", client.token, name, email)
+    if tags:
+        client.call("agent_tag", client.token, email, tags)
+
+
+def op_agent_tag(client: ZingtreeClient) -> None:
+    agents = load_agents()
+    if not confirm_agents(agents, "TAG"):
+        return
+    for a in agents:
+        client.call("agent_tag", client.token, a.email, ",".join(a.tags))
+
+
+def op_agent_remove(client: ZingtreeClient) -> None:
+    agents = load_agents()
+    if not confirm_agents(agents, "REMOVE"):
+        return
+    for a in agents:
+        client.call("agent_remove", client.token, a.email)
+
+
+def op_agent_remove_inter(client: ZingtreeClient) -> None:
+    email = input("\nEnter agent's email..." + PROMPT).strip()
+    client.call("agent_remove", client.token, email)
+
+
+def op_search_trees(client: ZingtreeClient) -> None:
+    query = input("\nEnter query..." + PROMPT).strip()
+    client.call("tree", client.token, "search_trees", query)
+
+
+def op_get_trees(client: ZingtreeClient) -> None:
+    client.call("tree", client.token, "get_trees")
+
+
+def op_get_tags(client: ZingtreeClient) -> None:
+    client.call("tree", client.token, "get_tags")
+
+
+def op_get_tree_tag_any(client: ZingtreeClient) -> None:
+    tags = input("\nSearch trees by comma-separated tags..." + PROMPT).strip()
+    client.call("tree", client.token, "get_tree_tag_any", tags)
+
+
+def op_get_tree_tag_all(client: ZingtreeClient) -> None:
+    tags = input("\nSearch trees by comma-separated tags..." + PROMPT).strip()
+    client.call("tree", client.token, "get_tree_tag_all", tags)
+
+
+def op_get_form_data(client: ZingtreeClient) -> None:
+    session = input("\nEnter session_id..." + PROMPT).strip()
+    client.call("session", session, "get_form_data")
+
+
+def op_delete_form_data(client: ZingtreeClient) -> None:
+    session = input("\nEnter session_id..." + PROMPT).strip()
+    client.call("session", session, "delete_form_data")
+
+
+def op_agent_sessions(client: ZingtreeClient) -> None:
+    email = input("\nEnter agent email..."        + PROMPT).strip()
+    start = input("\nStart date (YYYY-MM-DD)..."  + PROMPT).strip()
+    end   = input("\nEnd date (YYYY-MM-DD)..."    + PROMPT).strip()
+    client.call("agent_sessions", client.token, email, start, end)
+
+
+def op_tree_sessions(client: ZingtreeClient) -> None:
+    tree  = input("\nEnter tree_id..."            + PROMPT).strip()
+    start = input("\nStart date (YYYY-MM-DD)..."  + PROMPT).strip()
+    end   = input("\nEnd date (YYYY-MM-DD)..."    + PROMPT).strip()
+    client.call("tree_sessions", client.token, tree, start, end)
+
+
+def op_get_session_data(client: ZingtreeClient) -> None:
+    session = input("\nEnter session_id..." + PROMPT).strip()
+    client.call("session", session, "get_session_data")
+
+
+def op_get_session_data_pure(client: ZingtreeClient) -> None:
+    session = input("\nEnter session_id..." + PROMPT).strip()
+    client.call("session", session, "get_session_data_pure")
+
+
+def op_get_session_notes(client: ZingtreeClient) -> None:
+    session = input("\nEnter session_id..." + PROMPT).strip()
+    client.call("session", session, "get_session_notes")
+
+
+def op_event_log(client: ZingtreeClient) -> None:
+    start = input("\nStart date (YYYY-MM-DD)..." + PROMPT).strip()
+    end   = input("\nEnd date (YYYY-MM-DD)..."   + PROMPT).strip()
+    client.call("event_log", client.token, start, end)
+
+
+OPERATIONS = {
+    "agent_add":             op_agent_add,
+    "agent_add_inter":       op_agent_add_inter,
+    "agent_tag":             op_agent_tag,
+    "agent_remove":          op_agent_remove,
+    "agent_remove_inter":    op_agent_remove_inter,
+    "search_trees":          op_search_trees,
+    "get_trees":             op_get_trees,
+    "get_tags":              op_get_tags,
+    "get_tree_tag_any":      op_get_tree_tag_any,
+    "get_tree_tag_all":      op_get_tree_tag_all,
+    "get_form_data":         op_get_form_data,
+    "delete_form_data":      op_delete_form_data,
+    "agent_sessions":        op_agent_sessions,
+    "tree_sessions":         op_tree_sessions,
+    "get_session_data":      op_get_session_data,
+    "get_session_data_pure": op_get_session_data_pure,
+    "get_session_notes":     op_get_session_notes,
+    "event_log":             op_event_log,
+}
+
+# ----------------------------------------------------------------------------
+# Menus
+# ----------------------------------------------------------------------------
+
+MAIN_ITEMS = {
+    "0": ("agents",   "update agents"),
+    "1": ("trees",    "get info on trees"),
+    "2": ("forms",    "get or remove form data"),
+    "3": ("sessions", "tree and agent session info"),
+}
+
+SUBMENUS = {
+    "0": ("agents", [
+        ("auto agent_add      (from file)",      "agent_add"),
+        ("manual agent_add    (interactive)",    "agent_add_inter"),
+        ("auto agent_tag      (from file)",      "agent_tag"),
+        ("auto agent_remove   (from file)",      "agent_remove"),
+        ("manual agent_remove (interactive)",    "agent_remove_inter"),
+    ]),
+    "1": ("trees", [
+        ("search_trees     (search all trees for matching text)", "search_trees"),
+        ("get_trees        (fetch all trees)",                    "get_trees"),
+        ("get_tags         (fetch all tags used on trees)",       "get_tags"),
+        ("get_tree_tag_any (trees matching ANY tags)",            "get_tree_tag_any"),
+        ("get_tree_tag_all (trees matching ALL tags)",            "get_tree_tag_all"),
+    ]),
+    "2": ("forms", [
+        ("get_form_data    (form values entered during a session)", "get_form_data"),
+        ("delete_form_data (delete any form data)",                 "delete_form_data"),
+    ]),
+    "3": ("sessions", [
+        ("agent_sessions        (list agent sessions)",                "agent_sessions"),
+        ("tree_sessions         (list tree sessions)",                 "tree_sessions"),
+        ("get_session_data      (form values entered during session)", "get_session_data"),
+        ("get_session_data_pure (linear path to tree)",                "get_session_data_pure"),
+        ("get_session_notes     (agent notes from session)",           "get_session_notes"),
+        ("event_log             (event log for a date range)",         "event_log"),
+    ]),
+}
+
+META = """
+╭─────────────────────────────────────────────────╮
+│  Name    :: zinger
+│  Source  :: https://github.com/dropbox/zinger
+│  Author  :: Dillon Feeney
+│  Licence :: Apache-2.0
+│  Copyright (c) 2019 Dropbox, Inc.
+╰─────────────────────────────────────────────────╯
+"""
+
+
+def render(title: str, lines: list[str]) -> str:
+    border = "═" * 70
+    out = ["\n╭" + border + "╮", "│  zinger | {}".format(title), "│"]
+    out.extend("│  {}".format(line) for line in lines)
+    out += ["│", "│  [Q] quit", "╰" + border + "╯"]
+    return "\n".join(out)
+
+
+def render_main() -> str:
+    lines = ["[{}] {:9s} ({})".format(k, name, desc) for k, (name, desc) in MAIN_ITEMS.items()]
+    lines.append("[00] meta      (print metadata)")
+    return render("main menu", lines)
+
+
+def render_submenu(title: str, items: list[tuple[str, str]]) -> str:
+    lines = ["[{}] {}".format(i, label) for i, (label, _) in enumerate(items)]
+    return render("{} menu".format(title), lines)
+
+
+def clear() -> None:
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+# ----------------------------------------------------------------------------
+# Main loop
+# ----------------------------------------------------------------------------
+
+def run_submenu(client: ZingtreeClient, key: str) -> None:
+    title, items = SUBMENUS[key]
+    print(render_submenu(title, items))
+    choice = input("\nSelect option..." + PROMPT).strip()
+    if choice.lower() == "q":
+        return
+    if not choice.isdigit() or not 0 <= int(choice) < len(items):
+        print("Invalid option.")
+        return
+
+    op_key = items[int(choice)][1]
     try:
-        text_doc = open(zt_list).readlines()
-    except FileNotFoundError:
-        print("{} doc not found.\n".format(zt_list))
-        exit_now()
+        OPERATIONS[op_key](client)
+    except ZingtreeError as exc:
+        print("\nError: {}".format(exc))
+        return
+    if op_key.startswith("agent"):
+        print("\nAgents list: https://zingtree.com/account/agents.php")
 
-    lines = [line.rstrip("\n") for line in text_doc]
 
-    if zt_oper == "main":
-        main()
+def main() -> None:
+    clear()
+    token = os.getenv("ZINGTREE_API_TOKEN")
+    if not token:
+        sys.exit("
+    Environment variable ZINGTREE_API_TOKEN missing or empty in `.env`.  Either
+    set the variable manually (`export ZINGTREE_API_TOKEN='token' or in
+    the .env file -- this file is .gitignore'd)
+        ")
+    client = ZingtreeClient(token=token)
 
-    elif zt_oper == "agent_add":
-        # zt_api/agent_add/{{apikey}}/{{agent name}}/{{agent login}}
-        zt_oper_en = "[ADD] & [TAG]"
-        confirm = print_doc(zt_oper_en, lines)
-        if confirm.upper() == "Y":
-            print("Creating Zingtree agents...\n")
-            for line in lines:
-                line     = line.split(",")
-                zt_email = line[0].strip()
-                zt_oper = "agent_add"
-                zt_name  = line[1].strip()
-                zt_url   = "{}{}/{}/{}/{}".format(zt_api_url,
-                                                  zt_oper,
-                                                  zt_token,
-                                                  zt_name,
-                                                  zt_email)
-                call_zt(zt_url)
-                zt_oper = "agent_tag"
-                zt_tags = "/" + ",".join(map(str, line[2:])).strip()
-                zt_url  = "{}{}/{}/{}{}".format(zt_api_url,
-                                                zt_oper,
-                                                zt_token,
-                                                zt_email,
-                                                zt_tags)
-                call_zt(zt_url)
-        else:
-            quit_now()
+    while True:
+        print(render_main())
+        choice = input("\nSelect option..." + PROMPT).strip()
 
-    elif zt_oper == "agent_add_inter":
-        zt_oper = "agent_add"
-        zt_name, zt_email, zt_tags = input_agent_info()
-        zt_url  = "{}{}/{}/{}/{}".format(zt_api_url,
-                                         zt_oper,
-                                         zt_token,
-                                         zt_name,
-                                         zt_email)
-        call_zt(zt_url)
-        zt_oper = "agent_tag"
-        zt_url  = "{}{}/{}/{}/{}".format(zt_api_url,
-                                         zt_oper,
-                                         zt_token,
-                                         zt_email,
-                                         zt_tags)
-        call_zt(zt_url)
+        if choice.lower() == "q":
+            print("\nQuitting... Goodbye...\n")
+            return
+        if choice == "00":
+            print(META)
+            input("\nEnter to continue..." + PROMPT)
+            clear()
+            continue
+        if choice in SUBMENUS:
+            run_submenu(client, choice)
+            continue
+        print("Invalid option.")
 
-    elif zt_oper == "agent_tag":
-        # zt_api/agent_tag/{{apikey}}/{{agent login}}/{{tags}}
-        zt_oper_en = "[TAG]"
-        confirm = print_doc(zt_oper_en, lines)
-        if confirm.upper() == "Y":
-            print("Updating Zingtree agents' tag(s)...\n")
-            for line in lines:
-                line     = line.split(",")
-                zt_email = line[0].strip()
-                zt_tags  = "/" + ",".join(map(str, line[2:])).strip()
-                zt_url   = "{}{}/{}/{}{}".format(zt_api_url,
-                                                 zt_oper,
-                                                 zt_token,
-                                                 zt_email,
-                                                 zt_tags)
-                call_zt(zt_url)
-        else:
-            quit_now()
-
-    elif zt_oper == "agent_remove":
-        # zt_api/agent_remove/{{apikey}}/{{agent login}}
-        zt_oper_en = "[REMOVE]"
-        confirm = print_doc(zt_oper_en, lines)
-        if confirm.upper() == "Y":
-            print("Removing Zingtree agents...\n")
-            for line in lines:
-                line     = line.split(",")
-                zt_email = line[0].strip()
-                zt_url   = "{}{}/{}/{}".format(zt_api_url,
-                                               zt_oper,
-                                               zt_token,
-                                               zt_email)
-                call_zt(zt_url)
-        else:
-            quit_now()
-
-    elif zt_oper == "agent_remove_inter":
-        zt_oper  = "agent_remove"
-        zt_email = input_agent_email()
-        zt_url   = "{}{}/{}/{}".format(zt_api_url,
-                                       zt_oper,
-                                       zt_token,
-                                       zt_email)
-        call_zt(zt_url)
-
-    elif zt_oper == "get_tags":
-        # zt_api/tree/{{apikey}}/get_tags
-        print("Getting tags from tree...")
-        zt_url = "{}tree/{}/{}".format(zt_api_url,
-                                       zt_token,
-                                       zt_oper)
-        call_zt(zt_url)
-
-    elif zt_oper == "get_trees":
-        # zt_api/tree/{{apikey}}/get_trees
-        print("Climbing trees...")
-        zt_url = "{}tree/{}/{}".format(zt_api_url,
-                                       zt_token,
-                                       zt_oper)
-        call_zt(zt_url)
-
-    elif zt_oper == "get_tree_tag_all":
-        # zt_api/tree/{{apikey}}/get_tree_tag_all/{{taglist}}
-        print("Picking ALL tags from trees...")
-        zt_tags = input("\nSearch tree by comma-separated tags..." + uil())
-        zt_url  = "{}tree/{}/{}/{}".format(zt_api_url,
-                                           zt_token,
-                                           zt_oper,
-                                           zt_tags)
-        call_zt(zt_url)
-
-    elif zt_oper == "get_tree_tag_any":
-        # zt_api/tree/{{apikey}}/get_tree_tag_any/{{taglist}}
-        print("Picking ANY tags from trees...")
-        zt_tags = input("\nSearch tree by comma-separated tags..." + uil())
-        zt_url  = "{}tree/{}/{}/{}".format(zt_api_url,
-                                           zt_token,
-                                           zt_oper,
-                                           zt_tags)
-        call_zt(zt_url)
-
-    elif zt_oper == "search_trees":
-        # zt_api/tree/{{apikey}}/search_trees/{{search text}}
-        print("Scanning leaves...")
-        zt_query = input("\nEnter query..." + uil())
-        zt_url   = "{}tree/{}/{}/{}".format(zt_api_url,
-                                            zt_token,
-                                            zt_oper,
-                                            zt_query)
-        call_zt(zt_url)
-
-    elif zt_oper == "get_form_data":
-        # zt_api/session/{{session ID}}/get_form_data
-        print("Getting form data...")
-        zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                             zt_session,
-                                             zt_oper)
-        call_zt(zt_url)
-
-    elif zt_oper == "delete_form_data":
-        # zt_api/session/{{session ID}}/delete_form_data
-        print("Deleting form data...")
-        zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                              zt_session,
-                                              zt_oper)
-        call_zt(zt_url)
-
-    elif zt_oper == "event_log":
-        # zt_api/event_log/{{apikey}}/{{start date}}/{{end date}}
-        print("Showing event log...")
-        zt_start = input("\nStart date..." + uil())
-        zt_end   = input("\nEnd date..." + uil())
-        zt_url   = "{}{}/{}/{}/{}".format(zt_api_url,
-                                          zt_oper,
-                                          zt_token,
-                                          zt_start,
-                                          zt_end)
-        call_zt(zt_url)
-
-    elif zt_oper == "agent_sessions":
-        # zt_api/agent_sessions/{{apikey}}/{{agent}}/{{start date}}/{{end date}}
-        print("Gathering agent sessions...")
-        for line in lines:
-            line     = line.split(",")
-            zt_email = line[0].strip()
-            zt_start = input("\nStart date - {}...".format(zt_email) + uil())
-            zt_end   = input("\nEnd date - {}...".format(zt_email) + uil())
-            zt_url   = "{}{}/{}/{}/{}/{}".format(zt_api_url,
-                                                 zt_oper,
-                                                 zt_token,
-                                                 zt_email,
-                                                 zt_start,
-                                                 zt_end)
-            call_zt(zt_url)
-
-    elif zt_oper == "tree_sessions":
-        # zt_api/tree_sessions/{{apikey}}/{{tree ID}}/{{start}}/{{end}}
-        print("Gathering tree sessions...")
-        zt_tree  = input("\nEnter tree_id..." + uil())
-        zt_start = input("\nStart date - {}...".format(zt_tree) + uil())
-        zt_end   = input("\nEnd date - {}...".format(zt_tree) + uil())
-        zt_url   = "{}{}/{}/{}/{}/{}".format(zt_api_url,
-                                             zt_oper,
-                                             zt_token,
-                                             zt_tree,
-                                             zt_start,
-                                             zt_end)
-        call_zt(zt_url)
-
-    elif zt_oper == "get_session_data":
-        # zt_api/session/{{session ID}}/get_session_data
-        print("Getting session data...")
-        zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                              zt_session,
-                                              zt_oper)
-        call_zt(zt_url)
-
-    elif zt_oper == "get_session_data_pure":
-        # zt_api/session/{{session ID}}/get_session_data_pure
-        print("Getting form data...")
-        zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                              zt_session,
-                                              zt_oper)
-        call_zt(zt_url)
-
-    elif zt_oper == "get_session_notes":
-        # zt_api/session/{{session ID}}/get_session_notes
-        print("Getting form data...")
-        zt_session = input("\nEnter session_id..." + uil())
-        zt_url     = "{}session/{}/{}".format(zt_api_url,
-                                              zt_session,
-                                              zt_oper)
-        call_zt(zt_url)
-
-    elif zt_oper.upper() == "Q":
-        quit_now()
-
-    time.sleep(0.5)
-    main()
 
 if __name__ == "__main__":
-    subp.call(["clear"])
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nInterrupted.\n")
+        sys.exit(130)
