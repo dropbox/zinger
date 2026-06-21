@@ -7,6 +7,8 @@ API key       : https://zingtree.com/account/organizations.php  ->  `API Key`
                 Store it in a `.env` file as  `ZINGTREE_API_TOKEN="..."`, or
                 temporary environment variable via executing the following:
                 `export ZINGTREE_API_TOKEN="..."`
+Authentication is via the X-Api-Key request header.  The key is never
+placed in the URL path.
 
 This project is libre and licenced APACHE-2.0; see the COPYING file or
 https://www.apache.org/licenses/LICENSE-2.0 for more details.
@@ -20,13 +22,14 @@ Updated: 2020-05-07
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 try:
     from dotenv import load_dotenv
@@ -38,7 +41,7 @@ except ImportError:                       # dotenv is optional
 # Configuration
 # ----------------------------------------------------------------------------
 
-API_URL    = "https://zingtree.com/api/"
+API_URL    = "https://zingtree.com/api/v1/"
 ENV_FILE   = Path(".") / ".env"
 AGENT_FILE = Path("zingers.txt")
 TIMEOUT    = 30
@@ -63,33 +66,42 @@ class Agent:
 
 @dataclass
 class ZingtreeClient:
-    """Thin wrapper over the Zingtree REST endpoints.
+    """Thin wrapper over the Zingtree v1 REST endpoints.
 
-    The API embeds the key and all arguments in the URL path, so every
-    segment is percent-encoded.  Commas are preserved because tag lists are
-    comma-delimited inside a single segment.
+    The key travels in the X-Api-Key header.  Path segments carry only the
+    operation arguments and are percent-encoded; commas and carets are kept
+    literal because tag lists are comma-delimited and search_trees uses `^^`
+    as an AND separator.
     """
 
     token: str
     base_url: str = API_URL
     timeout: int = TIMEOUT
 
-    def _mask(self, url: str) -> str:
-        return url.replace(self.token, self.token[:5] + "...")
-
-    def call(self, *segments: str) -> str:
-        path = "/".join(quote(str(s), safe=",") for s in segments)
+    def call(self, *segments: str, method: str = "GET", body: dict | None = None) -> str:
+        path = "/".join(quote(str(s), safe=",^") for s in segments)
         url  = self.base_url + path
-        print("\nCalling URL... {}".format(self._mask(url)))
+
+        headers = {"X-Api-Key": self.token}
+        data = None
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+
+        print("\n{} {}".format(method, url))
+        request = Request(url, data=data, headers=headers, method=method)
         try:
-            with urlopen(url, timeout=self.timeout) as resp:
-                body = resp.read().decode("utf-8", errors="replace")
+            with urlopen(request, timeout=self.timeout) as resp:
+                status  = getattr(resp, "status", resp.getcode())
+                payload = resp.read().decode("utf-8", errors="replace")
         except HTTPError as exc:
-            raise ZingtreeError("HTTP {} from {}".format(exc.code, self._mask(url))) from exc
+            detail = exc.read().decode("utf-8", errors="replace").strip()
+            raise ZingtreeError("HTTP {} -- {}".format(exc.code, detail or exc.reason)) from exc
         except URLError as exc:
             raise ZingtreeError("Request failed: {}".format(exc.reason)) from exc
-        print(body)
-        return body
+
+        print(payload if payload else "OK ({})".format(status))
+        return payload
 
 
 def load_agents(path: Path = AGENT_FILE) -> list[Agent]:
@@ -132,18 +144,18 @@ def op_agent_add(client: ZingtreeClient) -> None:
     if not confirm_agents(agents, "ADD and TAG"):
         return
     for a in agents:
-        client.call("agent_add", client.token, a.name, a.email)
+        client.call("agent_add", a.name, a.email)
         if a.tags:
-            client.call("agent_tag", client.token, a.email, ",".join(a.tags))
+            client.call("agent_tag", a.email, ",".join(a.tags))
 
 
 def op_agent_add_inter(client: ZingtreeClient) -> None:
     name  = input("\nEnter agent's name..."  + PROMPT).strip()
     email = input("\nEnter agent's email..." + PROMPT).strip()
     tags  = input("\nEnter agent's tags..."  + PROMPT).strip()
-    client.call("agent_add", client.token, name, email)
+    client.call("agent_add", name, email)
     if tags:
-        client.call("agent_tag", client.token, email, tags)
+        client.call("agent_tag", email, tags)
 
 
 def op_agent_tag(client: ZingtreeClient) -> None:
@@ -151,7 +163,7 @@ def op_agent_tag(client: ZingtreeClient) -> None:
     if not confirm_agents(agents, "TAG"):
         return
     for a in agents:
-        client.call("agent_tag", client.token, a.email, ",".join(a.tags))
+        client.call("agent_tag", a.email, ",".join(a.tags))
 
 
 def op_agent_remove(client: ZingtreeClient) -> None:
@@ -159,35 +171,36 @@ def op_agent_remove(client: ZingtreeClient) -> None:
     if not confirm_agents(agents, "REMOVE"):
         return
     for a in agents:
-        client.call("agent_remove", client.token, a.email)
+        client.call("agent_remove", a.email)
 
 
 def op_agent_remove_inter(client: ZingtreeClient) -> None:
     email = input("\nEnter agent's email..." + PROMPT).strip()
-    client.call("agent_remove", client.token, email)
+    client.call("agent_remove", email)
 
 
 def op_search_trees(client: ZingtreeClient) -> None:
-    query = input("\nEnter query..." + PROMPT).strip()
-    client.call("tree", client.token, "search_trees", query)
-
-
-def op_get_trees(client: ZingtreeClient) -> None:
-    client.call("tree", client.token, "get_trees")
+    query = input("\nEnter query (use ^^ to AND terms)..." + PROMPT).strip()
+    client.call("tree", "search_trees", query)
 
 
 def op_get_tags(client: ZingtreeClient) -> None:
-    client.call("tree", client.token, "get_tags")
+    client.call("tree", "get_tags")
 
 
 def op_get_tree_tag_any(client: ZingtreeClient) -> None:
     tags = input("\nSearch trees by comma-separated tags..." + PROMPT).strip()
-    client.call("tree", client.token, "get_tree_tag_any", tags)
+    client.call("tree", "get_tree_tag_any", tags)
 
 
 def op_get_tree_tag_all(client: ZingtreeClient) -> None:
     tags = input("\nSearch trees by comma-separated tags..." + PROMPT).strip()
-    client.call("tree", client.token, "get_tree_tag_all", tags)
+    client.call("tree", "get_tree_tag_all", tags)
+
+
+def op_get_tree_variables(client: ZingtreeClient) -> None:
+    tree = input("\nEnter tree_id (append 000 for production)..." + PROMPT).strip()
+    client.call("get_tree_variables", tree)
 
 
 def op_get_form_data(client: ZingtreeClient) -> None:
@@ -200,18 +213,31 @@ def op_delete_form_data(client: ZingtreeClient) -> None:
     client.call("session", session, "delete_form_data")
 
 
+def op_delete_file_upload(client: ZingtreeClient) -> None:
+    folder = input("\nEnter folder (e.g. pdf)..." + PROMPT).strip()
+    name   = input("\nEnter file name..."         + PROMPT).strip()
+    client.call("delete_file_upload", folder, name)
+
+
 def op_agent_sessions(client: ZingtreeClient) -> None:
-    email = input("\nEnter agent email..."        + PROMPT).strip()
-    start = input("\nStart date (YYYY-MM-DD)..."  + PROMPT).strip()
-    end   = input("\nEnd date (YYYY-MM-DD)..."    + PROMPT).strip()
-    client.call("agent_sessions", client.token, email, start, end)
+    email = input("\nEnter agent email (* for all)..." + PROMPT).strip()
+    start = input("\nStart date (YYYY-MM-DD, blank = 30d)..." + PROMPT).strip()
+    end   = input("\nEnd date (YYYY-MM-DD, blank = 30d)..."   + PROMPT).strip()
+    client.call("agent_sessions", email, start, end)
 
 
 def op_tree_sessions(client: ZingtreeClient) -> None:
-    tree  = input("\nEnter tree_id..."            + PROMPT).strip()
-    start = input("\nStart date (YYYY-MM-DD)..."  + PROMPT).strip()
-    end   = input("\nEnd date (YYYY-MM-DD)..."    + PROMPT).strip()
-    client.call("tree_sessions", client.token, tree, start, end)
+    tree  = input("\nEnter tree_id (* for all)..." + PROMPT).strip()
+    start = input("\nStart date (YYYY-MM-DD, blank = 30d)..." + PROMPT).strip()
+    end   = input("\nEnd date (YYYY-MM-DD, blank = 30d)..."   + PROMPT).strip()
+    client.call("tree_sessions", tree, start, end)
+
+
+def op_tree_sessions_last_clicked(client: ZingtreeClient) -> None:
+    tree  = input("\nEnter tree_id (* for all)..." + PROMPT).strip()
+    start = input("\nStart date (YYYY-MM-DD, blank = 30d)..." + PROMPT).strip()
+    end   = input("\nEnd date (YYYY-MM-DD, blank = 30d)..."   + PROMPT).strip()
+    client.call("tree_sessions_last_clicked", tree, start, end)
 
 
 def op_get_session_data(client: ZingtreeClient) -> None:
@@ -229,31 +255,53 @@ def op_get_session_notes(client: ZingtreeClient) -> None:
     client.call("session", session, "get_session_notes")
 
 
+def op_session_freeze(client: ZingtreeClient) -> None:
+    session = input("\nEnter session_id..."             + PROMPT).strip()
+    project = input("\nEnter project_id (tree id)..."   + PROMPT).strip()
+    client.call("session_freeze", method="PUT",
+                body={"session_id": session, "project_id": project})
+
+
 def op_event_log(client: ZingtreeClient) -> None:
-    start = input("\nStart date (YYYY-MM-DD)..." + PROMPT).strip()
-    end   = input("\nEnd date (YYYY-MM-DD)..."   + PROMPT).strip()
-    client.call("event_log", client.token, start, end)
+    start = input("\nStart date (YYYY-MM-DD, blank = 30d)..." + PROMPT).strip()
+    end   = input("\nEnd date (YYYY-MM-DD, blank = 30d)..."   + PROMPT).strip()
+    client.call("event_log", start, end)
+
+
+def op_vault_get(client: ZingtreeClient) -> None:
+    uid = input("\nEnter file_uid..." + PROMPT).strip()
+    client.call("vault_files", uid)
+
+
+def op_vault_delete(client: ZingtreeClient) -> None:
+    uid = input("\nEnter file_uid..." + PROMPT).strip()
+    client.call("vault_files", uid, method="DELETE")
 
 
 OPERATIONS = {
-    "agent_add":             op_agent_add,
-    "agent_add_inter":       op_agent_add_inter,
-    "agent_tag":             op_agent_tag,
-    "agent_remove":          op_agent_remove,
-    "agent_remove_inter":    op_agent_remove_inter,
-    "search_trees":          op_search_trees,
-    "get_trees":             op_get_trees,
-    "get_tags":              op_get_tags,
-    "get_tree_tag_any":      op_get_tree_tag_any,
-    "get_tree_tag_all":      op_get_tree_tag_all,
-    "get_form_data":         op_get_form_data,
-    "delete_form_data":      op_delete_form_data,
-    "agent_sessions":        op_agent_sessions,
-    "tree_sessions":         op_tree_sessions,
-    "get_session_data":      op_get_session_data,
-    "get_session_data_pure": op_get_session_data_pure,
-    "get_session_notes":     op_get_session_notes,
-    "event_log":             op_event_log,
+    "agent_add":                  op_agent_add,
+    "agent_add_inter":            op_agent_add_inter,
+    "agent_tag":                  op_agent_tag,
+    "agent_remove":               op_agent_remove,
+    "agent_remove_inter":         op_agent_remove_inter,
+    "search_trees":               op_search_trees,
+    "get_tags":                   op_get_tags,
+    "get_tree_tag_any":           op_get_tree_tag_any,
+    "get_tree_tag_all":           op_get_tree_tag_all,
+    "get_tree_variables":         op_get_tree_variables,
+    "get_form_data":              op_get_form_data,
+    "delete_form_data":           op_delete_form_data,
+    "delete_file_upload":         op_delete_file_upload,
+    "agent_sessions":             op_agent_sessions,
+    "tree_sessions":              op_tree_sessions,
+    "tree_sessions_last_clicked": op_tree_sessions_last_clicked,
+    "get_session_data":           op_get_session_data,
+    "get_session_data_pure":      op_get_session_data_pure,
+    "get_session_notes":          op_get_session_notes,
+    "session_freeze":             op_session_freeze,
+    "event_log":                  op_event_log,
+    "vault_get":                  op_vault_get,
+    "vault_delete":               op_vault_delete,
 }
 
 # ----------------------------------------------------------------------------
@@ -265,6 +313,7 @@ MAIN_ITEMS = {
     "1": ("trees",    "get info on trees"),
     "2": ("forms",    "get or remove form data"),
     "3": ("sessions", "tree and agent session info"),
+    "4": ("files",    "manage uploaded and vault files"),
 }
 
 SUBMENUS = {
@@ -276,23 +325,30 @@ SUBMENUS = {
         ("manual agent_remove (interactive)",    "agent_remove_inter"),
     ]),
     "1": ("trees", [
-        ("search_trees     (search all trees for matching text)", "search_trees"),
-        ("get_trees        (fetch all trees)",                    "get_trees"),
-        ("get_tags         (fetch all tags used on trees)",       "get_tags"),
-        ("get_tree_tag_any (trees matching ANY tags)",            "get_tree_tag_any"),
-        ("get_tree_tag_all (trees matching ALL tags)",            "get_tree_tag_all"),
+        ("search_trees       (search all trees for matching text)", "search_trees"),
+        ("get_tags           (fetch all tags used on trees)",       "get_tags"),
+        ("get_tree_tag_any   (trees matching ANY tags)",            "get_tree_tag_any"),
+        ("get_tree_tag_all   (trees matching ALL tags)",            "get_tree_tag_all"),
+        ("get_tree_variables (variables defined within a tree)",    "get_tree_variables"),
     ]),
     "2": ("forms", [
         ("get_form_data    (form values entered during a session)", "get_form_data"),
         ("delete_form_data (delete any form data)",                 "delete_form_data"),
     ]),
     "3": ("sessions", [
-        ("agent_sessions        (list agent sessions)",                "agent_sessions"),
-        ("tree_sessions         (list tree sessions)",                 "tree_sessions"),
-        ("get_session_data      (form values entered during session)", "get_session_data"),
-        ("get_session_data_pure (linear path to tree)",                "get_session_data_pure"),
-        ("get_session_notes     (agent notes from session)",           "get_session_notes"),
-        ("event_log             (event log for a date range)",         "event_log"),
+        ("agent_sessions             (list agent sessions)",                "agent_sessions"),
+        ("tree_sessions              (list tree sessions)",                 "tree_sessions"),
+        ("tree_sessions_last_clicked (by last-click time)",                 "tree_sessions_last_clicked"),
+        ("get_session_data           (form values entered during session)", "get_session_data"),
+        ("get_session_data_pure      (linear path to tree)",                "get_session_data_pure"),
+        ("get_session_notes          (agent notes from session)",           "get_session_notes"),
+        ("session_freeze             (freeze a session)",                   "session_freeze"),
+        ("event_log                  (event log for a date range)",         "event_log"),
+    ]),
+    "4": ("files", [
+        ("delete_file_upload (delete an uploaded file)", "delete_file_upload"),
+        ("vault_files get    (fetch a vault file URL)",  "vault_get"),
+        ("vault_files delete (delete a vault file)",     "vault_delete"),
     ]),
 }
 
@@ -303,6 +359,7 @@ META = """
 │  Author  :: Dillon Feeney
 │  Licence :: Apache-2.0
 │  Copyright (c) 2019 Dropbox, Inc.
+│  Made with 🧁.
 ╰─────────────────────────────────────────────────╯
 """
 
